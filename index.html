@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simulador MRU / MRUV — Auto y Camión</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__title">
+        <span class="topbar__eq">x(t)</span>
+        <h1>Simulador de Encuentro — MRU vs MRUV</h1>
+      </div>
+      <div class="topbar__legend">
+        <span class="legend legend--car">■ Automóvil (v = 40 m/s, MRU)</span>
+        <span class="legend legend--truck">■ Camión (a = 4 m/s², MRUV)</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- Columna izquierda: Canvas + Matriz de lecturas abajo -->
+      <div class="stage-container">
+        <section class="stage">
+          <canvas id="simCanvas"></canvas>
+          <div class="scale-readout" id="scaleReadout">Escala: —</div>
+        </section>
+
+        <!-- Matriz horizontal de 1 fila y 6 columnas -->
+        <div class="panel__block horizontal-readouts">
+          <h2>Lecturas en tiempo real</h2>
+          <div class="readout-grid-matrix">
+            <div class="readout">
+              <span class="readout__label">Tiempo transcurrido</span>
+              <span class="readout__value" id="valTime">0.00 s</span>
+            </div>
+            <div class="readout readout--car">
+              <span class="readout__label">Posición auto x₁</span>
+              <span class="readout__value" id="valPosCar">0.00 m</span>
+            </div>
+            <div class="readout readout--truck">
+              <span class="readout__label">Posición camión x₂</span>
+              <span class="readout__value" id="valPosTruck">80.00 m</span>
+            </div>
+            <div class="readout readout--car">
+              <span class="readout__label">Velocidad auto v₁</span>
+              <span class="readout__value" id="valVelCar">40.00 m/s</span>
+            </div>
+            <div class="readout readout--truck">
+              <span class="readout__label">Velocidad camión v₂</span>
+              <span class="readout__value" id="valVelTruck">0.00 m/s</span>
+            </div>
+            <div class="readout">
+              <span class="readout__label">Separación (x₂ − x₁)</span>
+              <span class="readout__value" id="valGap">80.00 m</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Columna derecha: Controles y Eventos clave -->
+      <aside class="panel">
+        <div class="panel__block">
+          <h2>Controles</h2>
+          <div class="controls">
+            <button id="btnStart" class="btn btn--primary">
+              ▶ Iniciar simulación
+            </button>
+            <button id="btnPause" class="btn btn--ghost" disabled>
+              ⏸ Pausar
+            </button>
+            <button id="btnReset" class="btn btn--ghost">⟲ Reiniciar</button>
+          </div>
+          <div class="speed-control">
+            <label for="speedRange"
+              >Velocidad de reproducción: <span id="speedVal">1×</span></label
+            >
+            <input
+              type="range"
+              id="speedRange"
+              min="1"
+              max="20"
+              step="1"
+              value="4"
+            />
+          </div>
+          <div class="speed-control" style="margin-top: 15px">
+            <label for="timelineSlider"
+              >Línea de tiempo (Rebobinar / Avanzar):</label
+            >
+            <input
+              type="range"
+              id="timelineSlider"
+              min="0"
+              step="0.05"
+              value="0"
+              style="width: 100%; cursor: pointer"
+            />
+          </div>
+        </div>
+
+        <div class="panel__block">
+          <h2>Eventos clave</h2>
+          <ul class="events" id="eventsList">
+            <li data-event="e1" class="event">
+              <span class="event__dot"></span>
+              <div>
+                <strong>1er encuentro</strong>
+                <p>t ≈ 2,25 s · x ≈ 90,2 m</p>
+              </div>
+            </li>
+            <li data-event="e2" class="event">
+              <span class="event__dot"></span>
+              <div>
+                <strong>Velocidades iguales</strong>
+                <p>t = 10 s · separación = 120 m</p>
+              </div>
+            </li>
+            <li data-event="e3" class="event">
+              <span class="event__dot"></span>
+              <div>
+                <strong>2do encuentro</strong>
+                <p>t ≈ 17,75 s · x ≈ 709,8 m</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Orden obligatorio: Modelo primero (no depende de nada),
+         luego Vista (depende de Modelo), luego Controlador
+         (depende de Modelo y Vista), y por último main.js arranca todo. -->
+    <script src="modelo.js"></script>
+    <script src="vista.js"></script>
+    <script src="controlador.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>
