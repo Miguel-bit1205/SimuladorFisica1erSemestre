@@ -9,10 +9,7 @@
   <body>
     <header class="topbar">
       <div class="topbar__title">
-        <span class="topbar__eq">x(t)</span>
-        <h1>
-          Simulador de Encuentro — MRU vs MRUV By Miguel Lujan Y Asociados
-        </h1>
+        <h1>Simulador de Encuentro — MRU vs MRUV</h1>
       </div>
       <div class="topbar__legend">
         <span class="legend legend--car">■ Automóvil (v = 40 m/s, MRU)</span>
@@ -25,7 +22,6 @@
       <div class="stage-container">
         <section class="stage">
           <canvas id="simCanvas"></canvas>
-          <div class="scale-readout" id="scaleReadout">Escala: —</div>
         </section>
 
         <!-- Matriz horizontal de 1 fila y 6 columnas -->
@@ -83,7 +79,7 @@
               min="1"
               max="20"
               step="1"
-              value="4"
+              value="1"
             />
           </div>
           <div class="speed-control" style="margin-top: 15px">
@@ -104,21 +100,39 @@
         <div class="panel__block">
           <h2>Eventos clave</h2>
           <ul class="events" id="eventsList">
-            <li data-event="e1" class="event">
+            <!-- Usamos data-time con el tiempo exacto del 1er encuentro (~2.25s) -->
+            <li
+              data-event="e1"
+              data-time="2.254"
+              class="event"
+              style="cursor: pointer"
+            >
               <span class="event__dot"></span>
               <div>
                 <strong>1er encuentro</strong>
                 <p>t ≈ 2,25 s · x ≈ 90,2 m</p>
               </div>
             </li>
-            <li data-event="e2" class="event">
+            <!-- Tiempo exacto de velocidades iguales (10s) -->
+            <li
+              data-event="e2"
+              data-time="10"
+              class="event"
+              style="cursor: pointer"
+            >
               <span class="event__dot"></span>
               <div>
                 <strong>Velocidades iguales</strong>
                 <p>t = 10 s · separación = 120 m</p>
               </div>
             </li>
-            <li data-event="e3" class="event">
+            <!-- Tiempo exacto del 2do encuentro (~17.75s) -->
+            <li
+              data-event="e3"
+              data-time="17.746"
+              class="event"
+              style="cursor: pointer"
+            >
               <span class="event__dot"></span>
               <div>
                 <strong>2do encuentro</strong>

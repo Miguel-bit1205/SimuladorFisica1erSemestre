@@ -53,7 +53,9 @@ const Modelo = {
    * Devuelve el 1er encuentro (raíz menor) y el 2do encuentro (raíz mayor).
    */
   resolverEncuentros() {
-    const a = 1, b = -20, c = 40;
+    const a = 1,
+      b = -20,
+      c = 40;
     const discriminante = b * b - 4 * a * c; // 400 - 160 = 240
     const raizDisc = Math.sqrt(discriminante);
 
@@ -61,8 +63,10 @@ const Modelo = {
     const t2 = (-b + raizDisc) / (2 * a); // ≈ 17.746 s
 
     return {
-      t1, x1: this.posicionAuto(t1),
-      t2, x2: this.posicionAuto(t2),
+      t1,
+      x1: this.posicionAuto(t1),
+      t2,
+      x2: this.posicionAuto(t2),
     };
   },
 

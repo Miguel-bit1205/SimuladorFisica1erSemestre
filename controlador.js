@@ -15,7 +15,7 @@ const Controlador = {
     t: 0, // tiempo simulado actual, en segundos
     corriendo: false,
     pausado: false,
-    velocidadReproduccion: 4, // multiplicador de tiempo real -> tiempo simulado
+    velocidadReproduccion: 1, // multiplicador de tiempo real -> tiempo simulado
     ultimoFrameMs: 0,
   },
 
@@ -31,6 +31,7 @@ const Controlador = {
     this._configurarBotones();
     this._configurarControlVelocidad();
     this._configurarSliderTiempo();
+    this._configurarClicsEventos();
     window.addEventListener("resize", () => {
       Vista.redimensionar();
       Vista.render(this.estado.t);
@@ -106,12 +107,14 @@ const Controlador = {
 
     speedRange.addEventListener("input", () => {
       this.estado.velocidadReproduccion = Number(speedRange.value);
-      if (speedVal) speedVal.textContent = `${this.estado.velocidadReproduccion}×`;
+      if (speedVal)
+        speedVal.textContent = `${this.estado.velocidadReproduccion}×`;
     });
 
     // Sincroniza el valor mostrado con el valor inicial del control
     this.estado.velocidadReproduccion = Number(speedRange.value);
-    if (speedVal) speedVal.textContent = `${this.estado.velocidadReproduccion}×`;
+    if (speedVal)
+      speedVal.textContent = `${this.estado.velocidadReproduccion}×`;
   },
 
   /** Slider de "rebobinar / avanzar": permite mover t manualmente y ver
@@ -125,6 +128,30 @@ const Controlador = {
     slider.addEventListener("input", () => {
       this.estado.t = Number(slider.value);
       Vista.render(this.estado.t);
+    });
+  },
+
+  /**
+   * Permite hacer clic en las tarjetas de eventos clave para saltar
+   * instantáneamente el tiempo de la simulación a ese momento exacto.
+   */
+  _configurarClicsEventos() {
+    const eventosItems = document.querySelectorAll(".event");
+    eventosItems.forEach((item) => {
+      item.addEventListener("click", () => {
+        const tiempoObjetivo = Number(item.getAttribute("data-time"));
+        if (!isNaN(tiempoObjetivo)) {
+          // Pausamos la simulación al hacer clic para que el usuario examine el evento
+          this.estado.corriendo = false;
+          this.estado.pausado = true;
+          Vista.actualizarBotonesControl(false);
+          Vista.setTextoBotonPausa("▶ Reanudar");
+
+          // Actualizamos el tiempo y repintamos la vista al instante
+          this.estado.t = tiempoObjetivo;
+          Vista.render(this.estado.t);
+        }
+      });
     });
   },
 };

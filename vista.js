@@ -48,7 +48,8 @@ const Vista = {
     const { MARGIN_LEFT_M, MARGIN_RIGHT_M } = Modelo.CONFIG;
     this.worldMaxX = Modelo.DATOS_EXAMEN.encuentros.x2 + MARGIN_RIGHT_M;
     const worldWidthM = this.worldMaxX + MARGIN_LEFT_M;
-    this.pxPerMeter = this.canvas.width / (worldWidthM * window.devicePixelRatio);
+    this.pxPerMeter =
+      this.canvas.width / (worldWidthM * window.devicePixelRatio);
   },
 
   /**
@@ -74,8 +75,7 @@ const Vista = {
     this.calcularEscalaMundo();
 
     if (this.scaleReadout) {
-      this.scaleReadout.textContent =
-        `Escala: 1 px ≈ ${(1 / this.pxPerMeter).toFixed(2)} m · Rango: 0–${this.worldMaxX.toFixed(0)} m`;
+      this.scaleReadout.textContent = `Escala: 1 px ≈ ${(1 / this.pxPerMeter).toFixed(2)} m · Rango: 0–${this.worldMaxX.toFixed(0)} m`;
     }
   },
 
@@ -119,94 +119,136 @@ const Vista = {
 
   /** Silueta del auto. El tamaño en px es fijo (para que se vea), solo la
    * POSICIÓN respeta la escala real calculada arriba. */
+  /** Silueta mejorada y más estilizada del automóvil (MRU). */
+  /** Silueta con efecto 3D estilizado del automóvil (MRU). */
   dibujarAuto(xPx, y, color, label) {
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio;
-    const w = 46 * dpr, h = 18 * dpr;
+    const w = 52 * dpr,
+      h = 18 * dpr;
 
     ctx.save();
     ctx.translate(xPx, y);
 
+    // Sombra ovalada en el suelo para dar profundidad
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.beginPath();
-    ctx.ellipse(0, h * 0.55, w * 0.5, 4 * dpr, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, h * 0.65, w * 0.48, 4 * dpr, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Cuerpo inferior del auto (base)
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(-w / 2, 2);
-    ctx.lineTo(-w / 2 + 6, -4);
-    ctx.lineTo(-w * 0.15, -h);
-    ctx.lineTo(w * 0.28, -h);
-    ctx.lineTo(w / 2 - 4, -2);
+    ctx.moveTo(-w / 2, 4);
+    ctx.lineTo(-w / 2 + 8, -2);
+    ctx.lineTo(w / 2 - 8, -2);
     ctx.lineTo(w / 2, 4);
-    ctx.lineTo(w / 2, h * 0.4);
-    ctx.lineTo(-w / 2, h * 0.4);
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = "rgba(5,7,10,0.85)";
+    // Cabina superior (efecto 3D con pendiente)
+    const gradient = ctx.createLinearGradient(0, -h, 0, 0);
+    gradient.addColorStop(0, "#ffffff33"); // Brillo superior de luz
+    gradient.addColorStop(1, color);
+    ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.moveTo(-w * 0.1, -h + 2);
-    ctx.lineTo(w * 0.22, -h + 2);
-    ctx.lineTo(w * 0.14, -2);
-    ctx.lineTo(-w * 0.02, -2);
+    ctx.moveTo(-w * 0.22, 0);
+    ctx.lineTo(-w * 0.12, -h * 0.85);
+    ctx.lineTo(w * 0.15, -h * 0.85);
+    ctx.lineTo(w * 0.28, 0);
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = "#05070a";
+    // Parabrisas y ventanillas (efecto cristal oscuro)
+    ctx.fillStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.1, -h * 0.75);
+    ctx.lineTo(w * 0.08, -h * 0.75);
+    ctx.lineTo(w * 0.12, -3);
+    ctx.lineTo(-w * 0.04, -3);
+    ctx.closePath();
+    ctx.fill();
+
+    // Ruedas circulares con relieve
     [-w * 0.28, w * 0.28].forEach((dx) => {
+      ctx.fillStyle = "#020617";
       ctx.beginPath();
-      ctx.arc(dx, h * 0.4, 5 * dpr, 0, Math.PI * 2);
+      ctx.arc(dx, h * 0.4, 5.5 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      // Aro interior de la rueda
+      ctx.fillStyle = "#64748b";
+      ctx.beginPath();
+      ctx.arc(dx, h * 0.4, 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
     });
 
+    // Resplandor elegante (Glow)
     ctx.shadowColor = color;
     ctx.shadowBlur = 10 * dpr;
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = "#ffffff55";
     ctx.lineWidth = 1 * dpr;
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     ctx.restore();
 
+    // Etiqueta del vehículo
     ctx.fillStyle = color;
     ctx.font = `600 ${11 * dpr}px sans-serif`;
     ctx.textAlign = "center";
     ctx.fillText(label, xPx, y - h - 8 * dpr);
   },
 
-  /** Silueta del camión (cabina + caja). Mismo criterio: tamaño fijo, posición a escala. */
+  /** Silueta con efecto 3D y volumen del camión (MRUV). */
   dibujarCamion(xPx, y, color, label) {
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio;
-    const boxW = 40 * dpr, boxH = 26 * dpr;
-    const cabW = 16 * dpr, cabH = 20 * dpr;
+    const boxW = 44 * dpr,
+      boxH = 26 * dpr;
+    const cabW = 18 * dpr,
+      cabH = 20 * dpr;
 
     ctx.save();
     ctx.translate(xPx, y);
 
+    // Sombra inferior en el suelo
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.beginPath();
     ctx.ellipse(0, 6 * dpr, (boxW + cabW) * 0.42, 4 * dpr, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Caja de carga con volumen lateral
     ctx.fillStyle = color;
     ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
+
+    // Detalle de sombra lateral en la caja para efecto 3D
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.fillRect(-boxW / 2, -boxH * 0.3, boxW, boxH * 0.3);
+
+    // Cabina frontal del camión
+    ctx.fillStyle = "#cbd5e1"; // Cabina metálica clara para contrastar
     ctx.fillRect(boxW / 2 - 2, -cabH, cabW, cabH);
 
-    ctx.fillStyle = "rgba(5,7,10,0.85)";
+    // Parabrisas de la cabina
+    ctx.fillStyle = "#0f172a";
     ctx.fillRect(boxW / 2 + 2, -cabH + 4 * dpr, cabW - 6 * dpr, 8 * dpr);
 
-    ctx.fillStyle = "#05070a";
-    [-boxW * 0.32, -boxW * 0.02, boxW / 2 + cabW * 0.5].forEach((dx) => {
+    // Ruedas múltiples del camión con relieve
+    [-boxW * 0.32, -boxW * 0.02, boxW / 2 + cabW * 0.45].forEach((dx) => {
+      ctx.fillStyle = "#020617";
       ctx.beginPath();
-      ctx.arc(dx, 2 * dpr, 5 * dpr, 0, Math.PI * 2);
+      ctx.arc(dx, 3 * dpr, 5 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      // Centro de la rueda
+      ctx.fillStyle = "#64748b";
+      ctx.beginPath();
+      ctx.arc(dx, 3 * dpr, 2 * dpr, 0, Math.PI * 2);
       ctx.fill();
     });
 
     ctx.restore();
 
+    // Etiqueta del camión
     ctx.fillStyle = color;
     ctx.font = `600 ${11 * dpr}px sans-serif`;
     ctx.textAlign = "center";
@@ -272,8 +314,10 @@ const Vista = {
     if (p.time) p.time.textContent = `${t.toFixed(2)} s`;
     if (p.posCar) p.posCar.textContent = `${xCar.toFixed(2)} m`;
     if (p.posTruck) p.posTruck.textContent = `${xTruck.toFixed(2)} m`;
-    if (p.velCar) p.velCar.textContent = `${Modelo.velocidadAuto().toFixed(2)} m/s`;
-    if (p.velTruck) p.velTruck.textContent = `${Modelo.velocidadCamion(t).toFixed(2)} m/s`;
+    if (p.velCar)
+      p.velCar.textContent = `${Modelo.velocidadAuto().toFixed(2)} m/s`;
+    if (p.velTruck)
+      p.velTruck.textContent = `${Modelo.velocidadCamion(t).toFixed(2)} m/s`;
     if (p.gap) p.gap.textContent = `${Math.abs(xTruck - xCar).toFixed(2)} m`;
   },
 
@@ -337,8 +381,14 @@ const Vista = {
     }
 
     const dpr = window.devicePixelRatio;
-    const carColor = getComputedStyle(document.documentElement).getPropertyValue("--car-color").trim() || "#00e5ff";
-    const truckColor = getComputedStyle(document.documentElement).getPropertyValue("--truck-color").trim() || "#ff8a3d";
+    const carColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--car-color")
+        .trim() || "#00e5ff";
+    const truckColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--truck-color")
+        .trim() || "#ff8a3d";
 
     this.dibujarCamion(truckPx, this.roadY + 6 * dpr, truckColor, "Camión");
     this.dibujarAuto(carPx, this.roadY - 10 * dpr, carColor, "Auto");
