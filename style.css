@@ -37,6 +37,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap; /* CORREGIDO: evita que la leyenda se corte en pantallas angostas */
+  gap: 10px 24px;
   padding: 16px 32px;
   border-bottom: 1px solid var(--line-hair);
   background: var(--bg-panel);
@@ -48,6 +50,29 @@ body {
   margin: 0;
   letter-spacing: 0.3px;
   color: var(--text-mid);
+}
+
+/* CORREGIDO: estas reglas faltaban por completo. El HTML usa estas clases
+   para la leyenda de la cabecera ("■ Automóvil...", "■ Camión..."), pero
+   sin ellas el texto se mostraba sin color ni alineación. */
+.topbar__title {
+  display: flex;
+  align-items: center;
+}
+
+.topbar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.legend--car {
+  color: var(--car-color);
+}
+.legend--truck {
+  color: var(--truck-color);
 }
 
 /* ---------- Layout Principal ---------- */
@@ -314,4 +339,48 @@ body {
   font-size: 11px;
   font-family: var(--mono);
   color: var(--text-mid);
+}
+
+/* --- Corrección definitiva para las gráficas --- */
+.graphs-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+@media (max-width: 900px) {
+  .graphs-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.graph-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--line-hair);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.graph-card h2 {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: var(--text-mid);
+  margin: 0 0 14px 0;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Forzamos el tamaño real del canvas de las gráficas */
+.graph-card canvas {
+  width: 100% !important;
+  height: 240px !important;
+  background: #030712;
+  border-radius: 8px;
+  border: 1px solid var(--line-hair);
+  display: block;
 }

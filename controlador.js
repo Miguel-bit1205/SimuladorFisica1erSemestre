@@ -26,12 +26,15 @@ const Controlador = {
   init() {
     Vista.init();
     Vista.redimensionar();
+    Vista.actualizarInfoEstatica(); // leyenda + tarjetas de eventos con los datos iniciales
     Vista.render(this.estado.t);
 
     this._configurarBotones();
     this._configurarControlVelocidad();
     this._configurarSliderTiempo();
     this._configurarClicsEventos();
+    this._configurarParametrosDinamicos(); // <-- ¡Conectado correctamente aquí!
+
     window.addEventListener("resize", () => {
       Vista.redimensionar();
       Vista.render(this.estado.t);
@@ -57,6 +60,10 @@ const Controlador = {
       }
     }
     e.ultimoFrameMs = timestampMs;
+
+    // Actualizar también la posición visual del slider de tiempo mientras corre
+    const slider = Vista.timelineSlider;
+    if (slider) slider.value = e.t;
 
     Vista.render(e.t);
 
@@ -96,6 +103,8 @@ const Controlador = {
       e.t = 0;
       Vista.actualizarBotonesControl(false);
       Vista.setTextoBotonPausa("⏸ Pausar");
+      const slider = Vista.timelineSlider;
+      if (slider) slider.value = 0;
       Vista.render(e.t);
     });
   },
@@ -111,14 +120,11 @@ const Controlador = {
         speedVal.textContent = `${this.estado.velocidadReproduccion}×`;
     });
 
-    // Sincroniza el valor mostrado con el valor inicial del control
     this.estado.velocidadReproduccion = Number(speedRange.value);
     if (speedVal)
       speedVal.textContent = `${this.estado.velocidadReproduccion}×`;
   },
 
-  /** Slider de "rebobinar / avanzar": permite mover t manualmente y ver
-   * el escenario redibujado al instante en ese segundo exacto. */
   _configurarSliderTiempo() {
     const slider = Vista.timelineSlider;
     if (!slider) return;
@@ -126,32 +132,89 @@ const Controlador = {
     slider.max = Modelo.DATOS_EXAMEN.tEnd;
 
     slider.addEventListener("input", () => {
+      this.estado.corriendo = false;
+      this.estado.pausado = true;
+      Vista.actualizarBotonesControl(false);
+      Vista.setTextoBotonPausa("▶ Reanudar");
+
       this.estado.t = Number(slider.value);
       Vista.render(this.estado.t);
     });
   },
 
-  /**
-   * Permite hacer clic en las tarjetas de eventos clave para saltar
-   * instantáneamente el tiempo de la simulación a ese momento exacto.
-   */
   _configurarClicsEventos() {
     const eventosItems = document.querySelectorAll(".event");
     eventosItems.forEach((item) => {
       item.addEventListener("click", () => {
         const tiempoObjetivo = Number(item.getAttribute("data-time"));
         if (!isNaN(tiempoObjetivo)) {
-          // Pausamos la simulación al hacer clic para que el usuario examine el evento
           this.estado.corriendo = false;
           this.estado.pausado = true;
           Vista.actualizarBotonesControl(false);
           Vista.setTextoBotonPausa("▶ Reanudar");
 
-          // Actualizamos el tiempo y repintamos la vista al instante
           this.estado.t = tiempoObjetivo;
+          const slider = Vista.timelineSlider;
+          if (slider) slider.value = tiempoObjetivo;
+
           Vista.render(this.estado.t);
         }
       });
+    });
+  },
+
+  _configurarParametrosDinamicos() {
+    const btn = document.getElementById("btnAplicarConfig");
+    if (!btn) return;
+
+    btn.addEventListener("click", () => {
+      // 1. Pausar simulación actual
+      this.estado.corriendo = false;
+      this.estado.pausado = false;
+      Vista.actualizarBotonesControl(false);
+      Vista.setTextoBotonPausa("⏸ Pausar");
+
+      // 2. Leer valores de los inputs del HTML
+      const tipo1 = document.getElementById("tipo1").value;
+      const x0_1 = parseFloat(document.getElementById("x0_1").value) || 0;
+      const v0_1 = parseFloat(document.getElementById("v0_1").value) || 0;
+      let a_1 = parseFloat(document.getElementById("a_1").value) || 0;
+
+      const tipo2 = document.getElementById("tipo2").value;
+      const x0_2 = parseFloat(document.getElementById("x0_2").value) || 0;
+      const v0_2 = parseFloat(document.getElementById("v0_2").value) || 0;
+      let a_2 = parseFloat(document.getElementById("a_2").value) || 0;
+
+      // Validación lógica estricta para MRU
+      if (tipo1 === "mru") a_1 = 0;
+      if (tipo2 === "mru") a_2 = 0;
+
+      // 3. Actualizar modelo con los nuevos parámetros (recalcula DATOS_EXAMEN automáticamente)
+      Modelo.actualizarParametros({
+        tipoMovil1: tipo1,
+        x0_1,
+        v0_1,
+        a_1,
+        tipoMovil2: tipo2,
+        x0_2,
+        v0_2,
+        a_2,
+      });
+
+      // 4. Reiniciar el tiempo y actualizar el rango máximo del slider de tiempo
+      this.estado.t = 0;
+      const slider = Vista.timelineSlider;
+      if (slider) {
+        slider.max = Modelo.DATOS_EXAMEN.tEnd;
+        slider.value = 0;
+      }
+
+      // 5. Refrescar leyenda y tarjetas de eventos con los NUEVOS datos
+      //    (antes quedaban mostrando los valores del problema anterior).
+      Vista.actualizarInfoEstatica();
+
+      // 6. Redibujar la vista con los nuevos datos y gráficas
+      Vista.render(this.estado.t);
     });
   },
 };

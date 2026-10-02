@@ -12,13 +12,13 @@
         <h1>Simulador de Encuentro — MRU vs MRUV</h1>
       </div>
       <div class="topbar__legend">
-        <span class="legend legend--car">■ Automóvil (v = 40 m/s, MRU)</span>
-        <span class="legend legend--truck">■ Camión (a = 4 m/s², MRUV)</span>
+        <span id="legendCar" class="legend legend--car">■ Automóvil (v = 40 m/s, MRU)</span>
+        <span id="legendTruck" class="legend legend--truck">■ Camión (a = 4 m/s², MRUV)</span>
       </div>
     </header>
 
     <main class="layout">
-      <!-- Columna izquierda: Canvas + Matriz de lecturas abajo -->
+      <!-- Columna izquierda: Canvas + Matriz de lecturas + Gráficas -->
       <div class="stage-container">
         <section class="stage">
           <canvas id="simCanvas"></canvas>
@@ -54,20 +54,229 @@
             </div>
           </div>
         </div>
+
+        <!-- SECCIÓN DE GRÁFICAS DINÁMICAS (Ocupando todo el ancho inferior) -->
+        <div class="graphs-container">
+          <div class="graph-card">
+            <h2>Posición vs Tiempo (x - t)</h2>
+            <canvas id="canvasGraphX"></canvas>
+          </div>
+          <div class="graph-card">
+            <h2>Velocidad vs Tiempo (v - t)</h2>
+            <canvas id="canvasGraphV"></canvas>
+          </div>
+        </div>
       </div>
 
-      <!-- Columna derecha: Controles y Eventos clave -->
+      <!-- Columna derecha: Configuración, Controles y Eventos clave -->
       <aside class="panel">
+        <div class="panel__block">
+          <h2>Configuración del Problema</h2>
+          <div
+            class="config-grid"
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+              font-size: 12px;
+            "
+          >
+            <!-- Móvil 1 -->
+            <div
+              style="
+                background: var(--bg-panel-raise);
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid var(--line-hair);
+              "
+            >
+              <strong style="color: var(--car-color)"
+                >Automóvil (Móvil 1)</strong
+              >
+              <div
+                style="
+                  margin-top: 6px;
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 6px;
+                "
+              >
+                <label
+                  >Tipo:
+                  <select
+                    id="tipo1"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  >
+                    <option value="mru" selected>MRU (Velocidad cte)</option>
+                    <option value="mruv">MRUV (Acelerado)</option>
+                  </select>
+                </label>
+                <label
+                  >Posición x₀ (m):
+                  <input
+                    type="number"
+                    id="x0_1"
+                    value="0"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  />
+                </label>
+                <label
+                  >Velocidad v₀ (m/s):
+                  <input
+                    type="number"
+                    id="v0_1"
+                    value="40"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  />
+                </label>
+                <label id="labelA1"
+                  >Aceleración a (m/s²):
+                  <input
+                    type="number"
+                    id="a_1"
+                    value="0"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  />
+                </label>
+              </div>
+            </div>
+
+            <!-- Móvil 2 -->
+            <div
+              style="
+                background: var(--bg-panel-raise);
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid var(--line-hair);
+              "
+            >
+              <strong style="color: var(--truck-color)"
+                >Camión (Móvil 2)</strong
+              >
+              <div
+                style="
+                  margin-top: 6px;
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 6px;
+                "
+              >
+                <label
+                  >Tipo:
+                  <select
+                    id="tipo2"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  >
+                    <option value="mru">MRU (Velocidad cte)</option>
+                    <option value="mruv" selected>MRUV (Acelerado)</option>
+                  </select>
+                </label>
+                <label
+                  >Posición x₀ (m):
+                  <input
+                    type="number"
+                    id="x0_2"
+                    value="80"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  />
+                </label>
+                <label
+                  >Velocidad v₀ (m/s):
+                  <input
+                    type="number"
+                    id="v0_2"
+                    value="0"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  />
+                </label>
+                <label id="labelA2"
+                  >Aceleración a (m/s²):
+                  <input
+                    type="number"
+                    id="a_2"
+                    value="4"
+                    style="
+                      width: 100%;
+                      background: #090d16;
+                      color: white;
+                      border: 1px solid var(--line-hair);
+                      padding: 4px;
+                      border-radius: 4px;
+                    "
+                  />
+                </label>
+              </div>
+            </div>
+
+            <button
+              id="btnAplicarConfig"
+              class="btn btn--primary"
+              style="margin-top: 4px; width: 100%"
+            >
+              Actualizar Simulación
+            </button>
+          </div>
+        </div>
+
         <div class="panel__block">
           <h2>Controles</h2>
           <div class="controls">
             <button id="btnStart" class="btn btn--primary">
-              ▶ Iniciar simulación
+              Iniciar simulación
             </button>
             <button id="btnPause" class="btn btn--ghost" disabled>
-              ⏸ Pausar
+              Pausar
             </button>
-            <button id="btnReset" class="btn btn--ghost">⟲ Reiniciar</button>
+            <button id="btnReset" class="btn btn--ghost">Reiniciar</button>
           </div>
           <div class="speed-control">
             <label for="speedRange"
@@ -100,7 +309,6 @@
         <div class="panel__block">
           <h2>Eventos clave</h2>
           <ul class="events" id="eventsList">
-            <!-- Usamos data-time con el tiempo exacto del 1er encuentro (~2.25s) -->
             <li
               data-event="e1"
               data-time="2.254"
@@ -113,7 +321,6 @@
                 <p>t ≈ 2,25 s · x ≈ 90,2 m</p>
               </div>
             </li>
-            <!-- Tiempo exacto de velocidades iguales (10s) -->
             <li
               data-event="e2"
               data-time="10"
@@ -126,7 +333,6 @@
                 <p>t = 10 s · separación = 120 m</p>
               </div>
             </li>
-            <!-- Tiempo exacto del 2do encuentro (~17.75s) -->
             <li
               data-event="e3"
               data-time="17.746"
@@ -144,9 +350,7 @@
       </aside>
     </main>
 
-    <!-- Orden obligatorio: Modelo primero (no depende de nada),
-         luego Vista (depende de Modelo), luego Controlador
-         (depende de Modelo y Vista), y por último main.js arranca todo. -->
+    <!-- Scripts de la arquitectura MVC -->
     <script src="modelo.js"></script>
     <script src="vista.js"></script>
     <script src="controlador.js"></script>

@@ -16,6 +16,8 @@ const Vista = {
   timelineSlider: document.getElementById("timelineSlider"),
   btnStart: document.getElementById("btnStart"),
   btnPause: document.getElementById("btnPause"),
+  legendCar: document.getElementById("legendCar"),
+  legendTruck: document.getElementById("legendTruck"),
   panel: {
     time: document.getElementById("valTime"),
     posCar: document.getElementById("valPosCar"),
@@ -45,7 +47,9 @@ const Vista = {
    * lejana que debe caber en pantalla.
    */
   calcularEscalaMundo() {
-    const { MARGIN_LEFT_M, MARGIN_RIGHT_M } = Modelo.CONFIG;
+    // CORREGIDO: el modelo ahora guarda los márgenes en "Modelo.params"
+    // (antes se llamaba "Modelo.CONFIG", que ya no existe y rompía el cálculo).
+    const { MARGIN_LEFT_M, MARGIN_RIGHT_M } = Modelo.params;
     this.worldMaxX = Modelo.DATOS_EXAMEN.encuentros.x2 + MARGIN_RIGHT_M;
     const worldWidthM = this.worldMaxX + MARGIN_LEFT_M;
     this.pxPerMeter =
@@ -57,7 +61,8 @@ const Vista = {
    */
   metrosAPixeles(xMeters) {
     const dpr = window.devicePixelRatio;
-    return (xMeters + Modelo.CONFIG.MARGIN_LEFT_M) * this.pxPerMeter * dpr;
+    // CORREGIDO: Modelo.CONFIG -> Modelo.params (ver nota en calcularEscalaMundo).
+    return (xMeters + Modelo.params.MARGIN_LEFT_M) * this.pxPerMeter * dpr;
   },
 
   /**
@@ -305,6 +310,257 @@ const Vista = {
     ctx.restore();
   },
 
+  /** Dibuja la gráfica de Posición (x vs t) en tiempo real con ejes, etiquetas y marcas numéricas */
+  dibujarGraficaPosicion(tActual) {
+    const canvas = document.getElementById("canvasGraphX");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio;
+
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const tMax = Modelo.DATOS_EXAMEN.tEnd;
+
+    // CORREGIDO: antes el eje x llegaba hasta "encuentros.x2 + 50", un valor
+    // pensado solo para el problema de ejemplo. Con parámetros propios del
+    // usuario (por ejemplo, un móvil mucho más rápido) la curva se salía del
+    // cuadro. Ahora se toma el mayor valor realmente alcanzado por cualquiera
+    // de los dos móviles en todo el intervalo [0, tEnd], más un 8% de margen.
+    const xMax =
+      Math.max(
+        Modelo.DATOS_EXAMEN.encuentros.x2,
+        Modelo.posicionMovil1(tMax),
+        Modelo.posicionMovil2(tMax),
+        Modelo.params.x0_1,
+        Modelo.params.x0_2,
+        1, // evita xMax = 0 si todo quedara en el origen
+      ) * 1.08;
+
+    // Márgenes para dejar espacio a los números de los ejes
+    const padLeft = 50 * dpr;
+    const padBottom = 30 * dpr;
+    const padTop = 15 * dpr;
+    const padRight = 20 * dpr;
+
+    const graphW = w - padLeft - padRight;
+    const graphH = h - padBottom - padTop;
+
+    // --- Ejes coordenados ---
+    ctx.strokeStyle = "#2d3748";
+    ctx.lineWidth = 1 * dpr;
+    ctx.beginPath();
+    // Eje Y (Posición x)
+    ctx.moveTo(padLeft, padTop);
+    ctx.lineTo(padLeft, h - padBottom);
+    // Eje X (Tiempo t)
+    ctx.lineTo(w - padRight, h - padBottom);
+    ctx.stroke();
+
+    // --- Marcas y números en los ejes ---
+    ctx.fillStyle = "#64748b";
+    ctx.font = `${9 * dpr}px sans-serif`;
+
+    // Marcas en Eje X (Tiempo): antes el paso era fijo (5s); ahora se
+    // calcula como tMax/4 para dar siempre ~5 marcas, sea cual sea tMax.
+    const pasoT = tMax / 4;
+    for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) {
+      const px = padLeft + (tVal / tMax) * graphW;
+      ctx.fillRect(px, h - padBottom, 1 * dpr, 4 * dpr);
+      ctx.textAlign = "center";
+      ctx.fillText(`${tVal.toFixed(1)}s`, px, h - padBottom + 14 * dpr);
+    }
+
+    // Marcas en Eje Y (Posición): paso dinámico = xMax/4, en vez del
+    // incremento fijo de 200 m (que no tenía sentido con otros parámetros).
+    const pasoX = xMax / 4;
+    for (let xVal = 0; xVal <= xMax + 1e-6; xVal += pasoX) {
+      const py = h - padBottom - (xVal / xMax) * graphH;
+      ctx.fillRect(padLeft - 4 * dpr, py, 4 * dpr, 1 * dpr);
+      ctx.textAlign = "right";
+      ctx.fillText(`${xVal.toFixed(0)}m`, padLeft - 8 * dpr, py + 3 * dpr);
+    }
+
+    // Etiquetas de los ejes
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = `600 ${10 * dpr}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText("t (s)", w - padRight - 10 * dpr, h - 5 * dpr); // Eje X
+    ctx.save();
+    ctx.translate(15 * dpr, padTop + graphH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("x (m)", 0, 0); // Eje Y
+    ctx.restore();
+
+    // Funciones de conversión a coordenadas del canvas
+    const toX = (t) => padLeft + (t / tMax) * graphW;
+    const toY = (x) => h - padBottom - (x / xMax) * graphH;
+
+    const pasos = 100;
+    const dt = tActual / pasos;
+
+    // --- Curva del Auto (MRU) ---
+    ctx.strokeStyle =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--car-color")
+        .trim() || "#38bdf8";
+    ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    for (let i = 0; i <= pasos; i++) {
+      const t = i * dt;
+      const x = Modelo.posicionAuto(t);
+      const px = toX(t);
+      const py = toY(x);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // --- Curva del Camión (MRUV) ---
+    ctx.strokeStyle =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--truck-color")
+        .trim() || "#fb923c";
+    ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    for (let i = 0; i <= pasos; i++) {
+      const t = i * dt;
+      const x = Modelo.posicionCamion(t);
+      const px = toX(t);
+      const py = toY(x);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  },
+
+  /** Dibuja la gráfica de Velocidad (v vs t) en tiempo real con ejes, etiquetas y marcas numéricas */
+  dibujarGraficaVelocidad(tActual) {
+    const canvas = document.getElementById("canvasGraphV");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio;
+
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const tMax = Modelo.DATOS_EXAMEN.tEnd;
+
+    // CORREGIDO: antes vMax estaba fijo en 80 m/s. Con otras velocidades
+    // ingresadas por el usuario la curva se salía del cuadro (o se veía muy
+    // chica si eran menores). Como la velocidad es lineal en el tiempo
+    // (v = v0 + a·t), su valor máximo en [0, tMax] siempre está en uno de
+    // los dos extremos, así que basta comparar t=0 y t=tMax.
+    const vMax =
+      Math.max(
+        Math.abs(Modelo.velocidadMovil1(0)),
+        Math.abs(Modelo.velocidadMovil1(tMax)),
+        Math.abs(Modelo.velocidadMovil2(0)),
+        Math.abs(Modelo.velocidadMovil2(tMax)),
+        1, // evita vMax = 0 si ambos móviles estuvieran detenidos
+      ) * 1.15;
+
+    const padLeft = 45 * dpr;
+    const padBottom = 30 * dpr;
+    const padTop = 15 * dpr;
+    const padRight = 20 * dpr;
+
+    const graphW = w - padLeft - padRight;
+    const graphH = h - padBottom - padTop;
+
+    // --- Ejes coordenados ---
+    ctx.strokeStyle = "#2d3748";
+    ctx.lineWidth = 1 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, padTop);
+    ctx.lineTo(padLeft, h - padBottom);
+    ctx.lineTo(w - padRight, h - padBottom);
+    ctx.stroke();
+
+    // --- Marcas y números en los ejes ---
+    ctx.fillStyle = "#64748b";
+    ctx.font = `${9 * dpr}px sans-serif`;
+
+    // Marcas en Eje X (Tiempo): paso dinámico = tMax/4 (antes era fijo en 5s).
+    const pasoT = tMax / 4;
+    for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) {
+      const px = padLeft + (tVal / tMax) * graphW;
+      ctx.fillRect(px, h - padBottom, 1 * dpr, 4 * dpr);
+      ctx.textAlign = "center";
+      ctx.fillText(`${tVal.toFixed(1)}s`, px, h - padBottom + 14 * dpr);
+    }
+
+    // Marcas en Eje Y (Velocidad): paso dinámico = vMax/4 (antes era fijo en 20 m/s).
+    const pasoV = vMax / 4;
+    for (let vVal = 0; vVal <= vMax + 1e-6; vVal += pasoV) {
+      const py = h - padBottom - (vVal / vMax) * graphH;
+      ctx.fillRect(padLeft - 4 * dpr, py, 4 * dpr, 1 * dpr);
+      ctx.textAlign = "right";
+      ctx.fillText(`${vVal.toFixed(0)}`, padLeft - 8 * dpr, py + 3 * dpr);
+    }
+
+    // Etiquetas de los ejes
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = `600 ${10 * dpr}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText("t (s)", w - padRight - 10 * dpr, h - 5 * dpr);
+    ctx.save();
+    ctx.translate(15 * dpr, padTop + graphH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("v (m/s)", 0, 0);
+    ctx.restore();
+
+    const toX = (t) => padLeft + (t / tMax) * graphW;
+    const toY = (v) => h - padBottom - (v / vMax) * graphH;
+
+    const pasos = 100;
+    const dt = tActual / pasos;
+
+    // --- Velocidad del Móvil 1 / Auto (constante si es MRU, lineal si es MRUV) ---
+    ctx.strokeStyle =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--car-color")
+        .trim() || "#38bdf8";
+    ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    for (let i = 0; i <= pasos; i++) {
+      const t = i * dt;
+      // CORREGIDO: faltaba pasar "t" (antes siempre graficaba la velocidad en t=0).
+      const v = Modelo.velocidadAuto(t);
+      const px = toX(t);
+      const py = toY(v);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // --- Velocidad Camión (Lineal) ---
+    ctx.strokeStyle =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--truck-color")
+        .trim() || "#fb923c";
+    ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    for (let i = 0; i <= pasos; i++) {
+      const t = i * dt;
+      const v = Modelo.velocidadCamion(t);
+      const px = toX(t);
+      const py = toY(v);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  },
   /* --------------------------------------------------------------------
    * PANEL DE DATOS Y EVENTOS (DOM)
    * -------------------------------------------------------------------- */
@@ -315,7 +571,9 @@ const Vista = {
     if (p.posCar) p.posCar.textContent = `${xCar.toFixed(2)} m`;
     if (p.posTruck) p.posTruck.textContent = `${xTruck.toFixed(2)} m`;
     if (p.velCar)
-      p.velCar.textContent = `${Modelo.velocidadAuto().toFixed(2)} m/s`;
+      // CORREGIDO: faltaba pasar "t". Sin él, si el Móvil 1 se configura como
+      // MRUV, siempre mostraba la velocidad inicial (t=0) y nunca cambiaba.
+      p.velCar.textContent = `${Modelo.velocidadAuto(t).toFixed(2)} m/s`;
     if (p.velTruck)
       p.velTruck.textContent = `${Modelo.velocidadCamion(t).toFixed(2)} m/s`;
     if (p.gap) p.gap.textContent = `${Math.abs(xTruck - xCar).toFixed(2)} m`;
@@ -351,6 +609,71 @@ const Vista = {
     if (this.timelineSlider && document.activeElement !== this.timelineSlider) {
       this.timelineSlider.value = t;
     }
+  },
+
+  /* --------------------------------------------------------------------
+   * NUEVO: información que depende de la configuración pero NO cambia
+   * cuadro a cuadro (la leyenda superior y las tarjetas de "Eventos
+   * clave"). Antes quedaban con el texto fijo del problema de ejemplo
+   * (t≈2,25s, 90,2m, etc.) incluso después de que el usuario aplicara
+   * otra configuración distinta. Por eso NO se llaman desde render()
+   * (que corre 60 veces por segundo), sino una sola vez: al iniciar la
+   * app y cada vez que Controlador aplica una nueva configuración.
+   * -------------------------------------------------------------------- */
+
+  actualizarInfoEstatica() {
+    this._actualizarLeyenda();
+    this._actualizarTarjetasEventos();
+  },
+
+  /** Reescribe los textos "■ Automóvil (...)" / "■ Camión (...)" de la
+   * cabecera con los parámetros realmente vigentes en el Modelo. */
+  _actualizarLeyenda() {
+    const p = Modelo.params;
+
+    if (this.legendCar) {
+      this.legendCar.textContent =
+        p.tipoMovil1 === "mru"
+          ? `■ Automóvil (Móvil 1): v₀ = ${p.v0_1} m/s — MRU`
+          : `■ Automóvil (Móvil 1): v₀ = ${p.v0_1} m/s, a = ${p.a_1} m/s² — MRUV`;
+    }
+    if (this.legendTruck) {
+      this.legendTruck.textContent =
+        p.tipoMovil2 === "mru"
+          ? `■ Camión (Móvil 2): v₀ = ${p.v0_2} m/s — MRU`
+          : `■ Camión (Móvil 2): v₀ = ${p.v0_2} m/s, a = ${p.a_2} m/s² — MRUV`;
+    }
+  },
+
+  /** Recalcula el texto y el atributo data-time de cada tarjeta de la
+   * lista "Eventos clave" a partir de Modelo.DATOS_EXAMEN actual, para
+   * que el clic sobre la tarjeta salte siempre al instante correcto. */
+  _actualizarTarjetasEventos() {
+    const { encuentros, velIguales } = Modelo.DATOS_EXAMEN;
+
+    this._setTarjetaEvento(
+      "e1",
+      encuentros.t1,
+      `t ≈ ${encuentros.t1.toFixed(2)} s · x ≈ ${encuentros.x1.toFixed(1)} m`,
+    );
+    this._setTarjetaEvento(
+      "e2",
+      velIguales.t,
+      `t ≈ ${velIguales.t.toFixed(2)} s · separación = ${velIguales.gap.toFixed(0)} m`,
+    );
+    this._setTarjetaEvento(
+      "e3",
+      encuentros.t2,
+      `t ≈ ${encuentros.t2.toFixed(2)} s · x ≈ ${encuentros.x2.toFixed(1)} m`,
+    );
+  },
+
+  _setTarjetaEvento(key, tiempo, textoDescripcion) {
+    const li = document.querySelector(`[data-event="${key}"]`);
+    if (!li) return;
+    li.setAttribute("data-time", tiempo); // usado por Controlador al hacer clic
+    const parrafo = li.querySelector("p");
+    if (parrafo) parrafo.textContent = textoDescripcion;
   },
 
   /* --------------------------------------------------------------------
@@ -396,5 +719,8 @@ const Vista = {
     this.actualizarPanelDatos(t, xCar, xTruck);
     this.actualizarResaltadoEventos(t);
     this.sincronizarSlider(t);
+
+    this.dibujarGraficaPosicion(t);
+    this.dibujarGraficaVelocidad(t);
   },
 };

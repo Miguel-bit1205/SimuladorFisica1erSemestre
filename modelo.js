@@ -3,100 +3,194 @@
  * MODELO — modelo.js
  * ============================================================================
  * Responsabilidad única: guardar los datos del problema y calcular la física
- * (posiciones, velocidades, encuentros). NO toca el DOM ni el canvas.
- * Vista y Controlador solo LEEN lo que hay aquí; nunca recalculan fórmulas
- * por su cuenta. Si cambian los datos del enunciado, solo se edita CONFIG.
+ * de manera dinámica (posiciones, velocidades, encuentros).
  * ============================================================================
  */
 const Modelo = {
-  // --- Condiciones iniciales del problema (t = 0) --------------------------
-  CONFIG: {
-    V_CAR: 40, // Velocidad constante del auto, en m/s (144 km/h ÷ 3.6)
-    X_TRUCK0: 80, // Posición inicial del camión, en metros (adelante del auto)
-    A_TRUCK: 4, // Aceleración constante del camión, en m/s² (parte del reposo)
-    MARGIN_LEFT_M: 20, // Margen visual antes de x=0
-    MARGIN_RIGHT_M: 30, // Margen visual después del 2do encuentro
+  // Parámetros configurables del problema (con valores por defecto del examen).
+  // NOTA: este objeto reemplazó a un antiguo "Modelo.CONFIG" de una versión
+  // anterior. Si ves algún archivo que todavía lea "Modelo.CONFIG", es un
+  // resto desactualizado: el nombre correcto y vigente es "Modelo.params".
+  params: {
+    tipoMovil1: "mru", // "mru" o "mruv"
+    x0_1: 0, // Posición inicial móvil 1
+    v0_1: 40, // Velocidad inicial móvil 1
+    a_1: 0, // Aceleración móvil 1
+
+    tipoMovil2: "mruv", // "mru" o "mruv"
+    x0_2: 80, // Posición inicial móvil 2
+    v0_2: 0, // Velocidad inicial móvil 2
+    a_2: 4, // Aceleración móvil 2
+
+    MARGIN_LEFT_M: 20,
+    MARGIN_RIGHT_M: 30,
   },
 
   /**
-   * Posición del auto en el tiempo t (MRU). Fórmula: x(t) = v · t
+   * Actualiza los parámetros del modelo dinámicamente desde el controlador.
    */
+  actualizarParametros(nuevosDatos) {
+    this.params = { ...this.params, ...nuevosDatos };
+    // Recalculamos los datos de examen automáticamente al cambiar los parámetros
+    this.DATOS_EXAMEN = this.datosExamen();
+  },
+
+  /**
+   * Posición del Móvil 1 en el tiempo t (dependiendo de si es MRU o MRUV).
+   */
+  posicionMovil1(t) {
+    const { x0_1, v0_1, a_1, tipoMovil1 } = this.params;
+    if (tipoMovil1 === "mru") {
+      return x0_1 + v0_1 * t;
+    } else {
+      return x0_1 + v0_1 * t + 0.5 * a_1 * t * t;
+    }
+  },
+
+  /**
+   * Posición del Móvil 2 en el tiempo t (dependiendo de si es MRU o MRUV).
+   */
+  posicionMovil2(t) {
+    const { x0_2, v0_2, a_2, tipoMovil2 } = this.params;
+    if (tipoMovil2 === "mru") {
+      return x0_2 + v0_2 * t;
+    } else {
+      return x0_2 + v0_2 * t + 0.5 * a_2 * t * t;
+    }
+  },
+
+  /**
+   * Velocidad del Móvil 1 en el tiempo t.
+   */
+  velocidadMovil1(t) {
+    const { v0_1, a_1, tipoMovil1 } = this.params;
+    if (tipoMovil1 === "mru") {
+      return v0_1;
+    } else {
+      return v0_1 + a_1 * t;
+    }
+  },
+
+  /**
+   * Velocidad del Móvil 2 en el tiempo t.
+   */
+  velocidadMovil2(t) {
+    const { v0_2, a_2, tipoMovil2 } = this.params;
+    if (tipoMovil2 === "mru") {
+      return v0_2;
+    } else {
+      return v0_2 + a_2 * t;
+    }
+  },
+
+  // --- Métodos de compatibilidad con los nombres anteriores (Auto / Camión) ---
+  // IMPORTANTE: siempre hay que pasarles el "t" actual. El valor por defecto
+  // (t=0) en velocidadAuto es solo una red de seguridad para no romper si
+  // alguien olvida el argumento; si el Móvil 1 está en modo MRUV, llamarla
+  // sin t daría siempre la velocidad inicial y nunca la velocidad real.
   posicionAuto(t) {
-    return this.CONFIG.V_CAR * t;
+    return this.posicionMovil1(t);
   },
-
-  /**
-   * Posición del camión en el tiempo t (MRUV, v0=0). Fórmula: x(t) = x0 + ½·a·t²
-   */
   posicionCamion(t) {
-    return this.CONFIG.X_TRUCK0 + 0.5 * this.CONFIG.A_TRUCK * t * t;
+    return this.posicionMovil2(t);
   },
-
-  /**
-   * Velocidad del auto: constante en todo instante (MRU).
-   */
-  velocidadAuto() {
-    return this.CONFIG.V_CAR;
+  velocidadAuto(t = 0) {
+    return this.velocidadMovil1(t);
   },
-
-  /**
-   * Velocidad del camión en el tiempo t (MRUV, v0=0). Fórmula: v(t) = a · t
-   */
   velocidadCamion(t) {
-    return this.CONFIG.A_TRUCK * t;
+    return this.velocidadMovil2(t);
   },
 
   /**
-   * Resuelve los encuentros igualando posiciones: x_auto(t) = x_camion(t)
-   *   40t = 80 + 2t²  →  2t² - 40t + 80 = 0  →  t² - 20t + 40 = 0
-   * Se resuelve con la fórmula general (a=1, b=-20, c=40).
-   * Devuelve el 1er encuentro (raíz menor) y el 2do encuentro (raíz mayor).
+   * Resuelve numéricamente los encuentros igualando posiciones: x1(t) = x2(t)
+   * Útil para cualquier combinación ingresada por el usuario.
    */
   resolverEncuentros() {
-    const a = 1,
-      b = -20,
-      c = 40;
-    const discriminante = b * b - 4 * a * c; // 400 - 160 = 240
-    const raizDisc = Math.sqrt(discriminante);
+    let t1 = null,
+      t2 = null;
+    let minDiff = Infinity;
+    let tMin = 0;
 
-    const t1 = (-b - raizDisc) / (2 * a); // ≈ 2.254 s
-    const t2 = (-b + raizDisc) / (2 * a); // ≈ 17.746 s
+    // Barrido numérico de alta precisión para encontrar intersecciones
+    for (let t = 0; t <= 50; t += 0.01) {
+      const p1 = this.posicionMovil1(t);
+      const p2 = this.posicionMovil2(t);
+      const diff = Math.abs(p1 - p2);
+
+      if (diff < minDiff) {
+        minDiff = diff;
+        tMin = t;
+      }
+
+      if (t > 0 && diff < 0.3) {
+        if (t1 === null) {
+          t1 = t;
+        } else if (Math.abs(t - t1) > 1.0) {
+          t2 = t;
+        }
+      }
+    }
+
+    // Si hay un único punto de toque o rebase cercano
+    if (t1 !== null && t2 === null && minDiff < 0.5) {
+      t2 = t1;
+    }
+
+    // Caso límite: si con la configuración actual los móviles nunca llegan
+    // a juntarse (por ejemplo, ambos alejándose todo el tiempo), no existe
+    // un "encuentro" real. En ese caso se usa tMin (el instante de mínima
+    // distancia entre ambos) como mejor aproximación, solo para que el
+    // escalado del canvas y las gráficas tengan un valor de referencia.
+    const tFinal1 = t1 !== null ? t1 : tMin;
+    const tFinal2 = t2 !== null ? t2 : tMin;
 
     return {
-      t1,
-      x1: this.posicionAuto(t1),
-      t2,
-      x2: this.posicionAuto(t2),
+      t1: tFinal1,
+      x1: this.posicionMovil1(tFinal1),
+      t2: tFinal2,
+      x2: this.posicionMovil1(tFinal2),
     };
   },
 
   /**
-   * Resuelve el instante de velocidades iguales: v_auto = v_camion
-   *   40 = 4t  →  t = 10 s
-   * Y calcula la separación entre ambos en ese instante (120 m).
+   * Resuelve de forma aproximada el instante de velocidades iguales v1(t) = v2(t)
    */
   resolverVelocidadesIguales() {
-    const t = this.CONFIG.V_CAR / this.CONFIG.A_TRUCK; // 10 s
-    const xCar = this.posicionAuto(t);
-    const xTruck = this.posicionCamion(t);
-    return { t, xCar, xTruck, gap: Math.abs(xCar - xTruck) };
+    let tBest = 0;
+    let minDiff = Infinity;
+
+    for (let t = 0; t <= 50; t += 0.01) {
+      const v1 = this.velocidadMovil1(t);
+      const v2 = this.velocidadMovil2(t);
+      const diff = Math.abs(v1 - v2);
+      if (diff < minDiff) {
+        minDiff = diff;
+        tBest = t;
+      }
+    }
+
+    const p1 = this.posicionMovil1(tBest);
+    const p2 = this.posicionMovil2(tBest);
+    return {
+      t: tBest,
+      xCar: p1,
+      xTruck: p2,
+      gap: Math.abs(p1 - p2),
+    };
   },
 
   /**
-   * Calcula una sola vez, al cargarse el modelo, los "datos de examen":
-   * ambos encuentros, el instante de velocidades iguales y la duración
-   * total a simular (2do encuentro + margen de 1.5 s).
+   * Genera los datos dinámicos globales para las vistas y gráficas.
    */
   datosExamen() {
     const encuentros = this.resolverEncuentros();
     return {
       encuentros,
       velIguales: this.resolverVelocidadesIguales(),
-      tEnd: encuentros.t2 + 1.5,
+      tEnd: Math.max(encuentros.t2 + 1.5, 20),
     };
   },
 };
 
-// Se calculan una sola vez y quedan disponibles como resultado "congelado"
-// para que Vista/Controlador no tengan que volver a resolver la física.
+// Se inicializan los datos por defecto al arrancar
 Modelo.DATOS_EXAMEN = Modelo.datosExamen();
