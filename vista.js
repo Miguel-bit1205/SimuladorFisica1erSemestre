@@ -29,7 +29,8 @@ const Vista = {
 
   // --- Estado propio de la vista: escalado metros -> píxeles ---------------
   ctx: null,
-  worldMaxX: 0, // metros que caben en el ancho visible del canvas
+  worldMinX: 0, // metro más a la izquierda que cabe en el canvas (puede ser negativo)
+  worldMaxX: 0, // metro más a la derecha que cabe en el canvas
   pxPerMeter: 1, // factor de conversión metros -> píxeles
   roadY: 0, // coordenada Y del eje de la carretera, en píxeles
 
@@ -50,8 +51,37 @@ const Vista = {
     // CORREGIDO: el modelo ahora guarda los márgenes en "Modelo.params"
     // (antes se llamaba "Modelo.CONFIG", que ya no existe y rompía el cálculo).
     const { MARGIN_LEFT_M, MARGIN_RIGHT_M } = Modelo.params;
-    this.worldMaxX = Modelo.DATOS_EXAMEN.encuentros.x2 + MARGIN_RIGHT_M;
-    const worldWidthM = this.worldMaxX + MARGIN_LEFT_M;
+
+    // CORREGIDO: antes el rango visible ("worldMaxX") se calculaba SOLO con
+    // encuentros.x2 (el 2do encuentro del problema de ejemplo). Si el
+    // usuario cambiaba la configuración y los móviles ya no se cruzaban ahí
+    // -o sus posiciones terminaban más allá de ese punto, o incluso en
+    // negativo-, la escena quedaba más chica que el recorrido real y los
+    // vehículos "se salían" del canvas por el borde derecho.
+    //
+    // Ahora se recorre (muestrea) la posición real de ambos móviles a lo
+    // largo de toda la simulación [0, tEnd] y se usa el mínimo y el máximo
+    // efectivamente alcanzados, así la carretera SIEMPRE los contiene,
+    // sea cual sea la configuración ingresada.
+    const tEnd = Modelo.DATOS_EXAMEN.tEnd;
+    const pasos = 100;
+    let minX = Math.min(0, Modelo.params.x0_1, Modelo.params.x0_2);
+    let maxX = Math.max(Modelo.params.x0_1, Modelo.params.x0_2);
+
+    for (let i = 0; i <= pasos; i++) {
+      const t = (tEnd * i) / pasos;
+      const p1 = Modelo.posicionMovil1(t);
+      const p2 = Modelo.posicionMovil2(t);
+      if (p1 < minX) minX = p1;
+      if (p2 < minX) minX = p2;
+      if (p1 > maxX) maxX = p1;
+      if (p2 > maxX) maxX = p2;
+    }
+
+    this.worldMinX = minX - MARGIN_LEFT_M;
+    this.worldMaxX = maxX + MARGIN_RIGHT_M;
+
+    const worldWidthM = this.worldMaxX - this.worldMinX;
     this.pxPerMeter =
       this.canvas.width / (worldWidthM * window.devicePixelRatio);
   },
@@ -61,8 +91,11 @@ const Vista = {
    */
   metrosAPixeles(xMeters) {
     const dpr = window.devicePixelRatio;
-    // CORREGIDO: Modelo.CONFIG -> Modelo.params (ver nota en calcularEscalaMundo).
-    return (xMeters + Modelo.params.MARGIN_LEFT_M) * this.pxPerMeter * dpr;
+    // CORREGIDO: antes se sumaba un margen fijo asumiendo que la escena
+    // siempre arrancaba en x=0. Ahora se resta "worldMinX" (el extremo
+    // izquierdo real de la escena, calculado en calcularEscalaMundo, que
+    // puede no ser 0 si algún móvil queda en posiciones negativas).
+    return (xMeters - this.worldMinX) * this.pxPerMeter * dpr;
   },
 
   /**
@@ -80,7 +113,8 @@ const Vista = {
     this.calcularEscalaMundo();
 
     if (this.scaleReadout) {
-      this.scaleReadout.textContent = `Escala: 1 px ≈ ${(1 / this.pxPerMeter).toFixed(2)} m · Rango: 0–${this.worldMaxX.toFixed(0)} m`;
+      // CORREGIDO: el rango mostrado ahora refleja worldMinX real (puede no ser 0).
+      this.scaleReadout.textContent = `Escala: 1 px ≈ ${(1 / this.pxPerMeter).toFixed(2)} m · Rango: ${this.worldMinX.toFixed(0)}–${this.worldMaxX.toFixed(0)} m`;
     }
   },
 
@@ -111,14 +145,22 @@ const Vista = {
     ctx.fillStyle = "#5b6b80";
     ctx.font = `${11 * dpr}px monospace`;
     ctx.textAlign = "center";
-    for (let m = 0; m <= this.worldMaxX; m += 100) {
+
+    // CORREGIDO: antes las marcas arrancaban siempre en 0 y cada 100 m fijos,
+    // asumiendo el rango del problema de ejemplo. Ahora recorren el rango
+    // real de la escena (worldMinX..worldMaxX, que puede empezar en
+    // negativo) con un paso proporcional, igual que en las gráficas.
+    const rangoTotal = this.worldMaxX - this.worldMinX;
+    const paso = Math.max(1, rangoTotal / 8);
+    const inicio = Math.ceil(this.worldMinX / paso) * paso;
+    for (let m = inicio; m <= this.worldMaxX; m += paso) {
       const px = this.metrosAPixeles(m);
       ctx.strokeStyle = "#1e2733";
       ctx.beginPath();
       ctx.moveTo(px, this.roadY - roadHeight / 2 - 6 * dpr);
       ctx.lineTo(px, this.roadY + roadHeight / 2 + 6 * dpr);
       ctx.stroke();
-      ctx.fillText(`${m} m`, px, this.roadY + roadHeight / 2 + 22 * dpr);
+      ctx.fillText(`${m.toFixed(0)} m`, px, this.roadY + roadHeight / 2 + 22 * dpr);
     }
   },
 
