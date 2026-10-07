@@ -50,6 +50,12 @@ const Vista = {
   DIM_AUTO: { w: 52, h: 18 },
   DIM_CAMION: { boxW: 44, boxH: 26, cabW: 18, cabH: 20 },
 
+  // PROBLEMA 3: ancho de la "ventana" visible de la carretera, en metros.
+  // La cámara sigue a los dos móviles en vez de mostrar toda la simulación
+  // de punta a punta, para que no se vean microscópicos con aceleraciones grandes.
+  VENTANA_MIN_M: 400,
+  VENTANA_MAX_M: 1200,
+
   init() {
     this.ctx = this.canvas.getContext("2d");
   },
@@ -59,34 +65,37 @@ const Vista = {
    * -------------------------------------------------------------------- */
 
   /**
-   * Recalcula el factor de escala muestreando la posición real de ambos
-   * móviles a lo largo de toda la simulación [0, tEnd], para que la
-   * carretera siempre los contenga sea cual sea la configuración.
+   * PROBLEMA 3: cámara con ventana móvil. En vez de muestrear TODA la
+   * simulación [0, tEnd] (lo que hacía que, con aceleraciones grandes, el
+   * rango se disparara a miles de metros y los sprites de tamaño fijo se
+   * vieran microscópicos), la ventana visible se recalcula en cada frame
+   * centrada en los dos móviles EN ESE INSTANTE, con un ancho que se adapta
+   * a qué tan separados están (clamp entre VENTANA_MIN_M y VENTANA_MAX_M).
+   * Se llama al principio de render(t); redimensionar() ya NO calcula escala.
    */
-  calcularEscalaMundo() {
+  actualizarCamara(t) {
     const { MARGIN_LEFT_M, MARGIN_RIGHT_M } = Modelo.params;
 
-    const tEnd = Modelo.DATOS_EXAMEN.tEnd;
-    const pasos = 100;
-    let minX = Math.min(0, Modelo.params.x0_1, Modelo.params.x0_2);
-    let maxX = Math.max(Modelo.params.x0_1, Modelo.params.x0_2);
+    const x1 = Modelo.posicionMovil1(t);
+    const x2 = Modelo.posicionMovil2(t);
+    const centro = (x1 + x2) / 2;
 
-    for (let i = 0; i <= pasos; i++) {
-      const t = (tEnd * i) / pasos;
-      const p1 = Modelo.posicionMovil1(t);
-      const p2 = Modelo.posicionMovil2(t);
-      if (p1 < minX) minX = p1;
-      if (p2 < minX) minX = p2;
-      if (p1 > maxX) maxX = p1;
-      if (p2 > maxX) maxX = p2;
-    }
+    const anchoVentana = Math.min(
+      this.VENTANA_MAX_M,
+      Math.max(this.VENTANA_MIN_M, Math.abs(x2 - x1) * 1.5),
+    );
 
-    this.worldMinX = minX - MARGIN_LEFT_M;
-    this.worldMaxX = maxX + MARGIN_RIGHT_M;
+    this.worldMinX = centro - anchoVentana / 2 - MARGIN_LEFT_M;
+    this.worldMaxX = centro + anchoVentana / 2 + MARGIN_RIGHT_M;
 
     const worldWidthM = this.worldMaxX - this.worldMinX;
     this.pxPerMeter =
       this.canvas.width / (worldWidthM * window.devicePixelRatio);
+
+    // El readout de escala se actualiza acá (cada frame), ya no en redimensionar().
+    if (this.scaleReadout) {
+      this.scaleReadout.textContent = `Escala: 1 px ≈ ${(1 / this.pxPerMeter).toFixed(2)} m · Rango: ${this.worldMinX.toFixed(0)}–${this.worldMaxX.toFixed(0)} m`;
+    }
   },
 
   /**
@@ -98,9 +107,10 @@ const Vista = {
   },
 
   /**
-   * Ajusta el tamaño físico del canvas al tamaño real de su contenedor
-   * (con soporte HiDPI/Retina) y recalcula la escala. Se llama al cargar
-   * la página y cada vez que la ventana cambia de tamaño.
+   * PROBLEMA 3: ya NO calcula la escala (eso ahora es trabajo de
+   * actualizarCamara, que corre cada frame en render). Solo ajusta el
+   * tamaño físico del canvas (con soporte HiDPI/Retina) y roadY. Se llama
+   * al cargar la página y cada vez que la ventana cambia de tamaño.
    */
   redimensionar() {
     const rect = this.canvas.getBoundingClientRect();
@@ -108,12 +118,6 @@ const Vista = {
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
     this.roadY = this.canvas.height * 0.55;
-
-    this.calcularEscalaMundo();
-
-    if (this.scaleReadout) {
-      this.scaleReadout.textContent = `Escala: 1 px ≈ ${(1 / this.pxPerMeter).toFixed(2)} m · Rango: ${this.worldMinX.toFixed(0)}–${this.worldMaxX.toFixed(0)} m`;
-    }
   },
 
   /* --------------------------------------------------------------------
@@ -499,6 +503,83 @@ const Vista = {
     ctx.restore();
   },
 
+  /** PROBLEMA 1a: paso "bonito" para las marcas de un eje — siempre un
+   * múltiplo de 1, 2 o 5 por una potencia de 10 (1,2,5,10,20,50,100,200...),
+   * apuntando a ~numTicksDeseados marcas sobre el rango dado. Compartido por
+   * las 3 gráficas, para no duplicar la lógica de redondeo en cada una. */
+  _calcularPasoBonito(rango, numTicksDeseados = 5) {
+    if (!isFinite(rango) || rango <= 0) return 1;
+    const pasoCrudo = rango / numTicksDeseados;
+    const magnitud = Math.pow(10, Math.floor(Math.log10(pasoCrudo)));
+    const residuo = pasoCrudo / magnitud;
+    let pasoNormalizado;
+    if (residuo <= 1) pasoNormalizado = 1;
+    else if (residuo <= 2) pasoNormalizado = 2;
+    else if (residuo <= 5) pasoNormalizado = 5;
+    else pasoNormalizado = 10;
+    return pasoNormalizado * magnitud;
+  },
+
+  /** Formatea un valor de tick: sin decimales si el paso es entero (≥1),
+   * con 1 decimal si el paso es fraccionario (p.ej. paso=0.5). */
+  _formatoTick(valor, paso) {
+    return valor.toFixed(paso < 1 ? 1 : 0);
+  },
+
+  /** PROBLEMA 1c: pequeño readout de valores instantáneos (esquina inferior
+   * izquierda de la gráfica), con cada segmento en el color de su móvil.
+   * "segmentos" es [{texto, color}, ...] dibujados uno a continuación del otro. */
+  _dibujarReadoutInstantaneo(ctx, x, y, dpr, segmentos) {
+    ctx.save();
+    ctx.font = `600 ${10 * dpr}px monospace`;
+    ctx.textAlign = "left";
+    let cursorX = x;
+    segmentos.forEach((seg) => {
+      ctx.fillStyle = seg.color;
+      ctx.fillText(seg.texto, cursorX, y);
+      cursorX += ctx.measureText(seg.texto).width;
+    });
+    ctx.restore();
+  },
+
+  /** PROBLEMA 1d: marca vertical punteada en t1 (1er encuentro), t_v
+   * (velocidades iguales) y t2 (2do encuentro), igual en las 3 gráficas.
+   * Color distinto al de la grilla (gris) y al de las curvas (car/truck)
+   * para no confundirlas. Se dibuja ANTES que las curvas, para que éstas
+   * queden por encima. */
+  _dibujarMarcadoresEventoGrafica(ctx, toX, padTop, h, padBottom, dpr) {
+    const { encuentros, velIguales } = Modelo.DATOS_EXAMEN;
+    const tMax = Modelo.DATOS_EXAMEN.tEnd;
+    const colorMarcador = "#facc15"; // distinto de la grilla y de car/truck
+
+    const eventos = [
+      { t: encuentros.t1, etiqueta: "t₁" },
+      { t: velIguales.t, etiqueta: "t_v" },
+      { t: encuentros.t2, etiqueta: "t₂" },
+    ];
+
+    ctx.save();
+    ctx.strokeStyle = colorMarcador;
+    ctx.fillStyle = colorMarcador;
+    ctx.lineWidth = 1 * dpr;
+    ctx.setLineDash([3 * dpr, 3 * dpr]);
+    ctx.font = `600 ${9 * dpr}px monospace`;
+    ctx.textAlign = "center";
+
+    eventos.forEach((ev) => {
+      if (ev.t < 0 || ev.t > tMax) return; // fuera del rango simulado: no se dibuja
+      const px = toX(ev.t);
+      ctx.beginPath();
+      ctx.moveTo(px, padTop);
+      ctx.lineTo(px, h - padBottom);
+      ctx.stroke();
+      ctx.fillText(ev.etiqueta, px, padTop + 9 * dpr);
+    });
+
+    ctx.setLineDash([]);
+    ctx.restore();
+  },
+
   /** Dibuja la gráfica de Posición (x vs t) en tiempo real con ejes, etiquetas y marcas numéricas */
   dibujarGraficaPosicion(tActual) {
     const canvas = document.getElementById("canvasGraphX");
@@ -540,9 +621,9 @@ const Vista = {
     const toX = (t) => padLeft + (t / tMax) * graphW;
     const toY = (x) => h - padBottom - (x / xMax) * graphH;
 
-    // Marcas (paso dinámico = rango/4, da siempre ~5 marcas)
-    const pasoT = tMax / 4;
-    const pasoX = xMax / 4;
+    // PROBLEMA 1a: paso "bonito" en vez de rango/4 (evita ticks feos como 2.6)
+    const pasoT = this._calcularPasoBonito(tMax);
+    const pasoX = this._calcularPasoBonito(xMax);
     const xTicksPx = [];
     const yTicksPx = [];
     for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) xTicksPx.push(toX(tVal));
@@ -560,23 +641,23 @@ const Vista = {
     ctx.lineTo(w - padRight, h - padBottom);
     ctx.stroke();
 
-    // --- Marcas y números en los ejes ---
+    // --- Marcas y números en los ejes (PROBLEMA 1b: con unidad en cada tick) ---
     ctx.fillStyle = "#64748b";
     ctx.font = `${9 * dpr}px sans-serif`;
     for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) {
       const px = toX(tVal);
       ctx.fillRect(px, h - padBottom, 1 * dpr, 4 * dpr);
       ctx.textAlign = "center";
-      ctx.fillText(`${tVal.toFixed(1)}s`, px, h - padBottom + 14 * dpr);
+      ctx.fillText(`${tVal.toFixed(1)} s`, px, h - padBottom + 14 * dpr);
     }
     for (let xVal = 0; xVal <= xMax + 1e-6; xVal += pasoX) {
       const py = toY(xVal);
       ctx.fillRect(padLeft - 4 * dpr, py, 4 * dpr, 1 * dpr);
       ctx.textAlign = "right";
-      ctx.fillText(`${xVal.toFixed(0)}m`, padLeft - 8 * dpr, py + 3 * dpr);
+      ctx.fillText(`${this._formatoTick(xVal, pasoX)} m`, padLeft - 8 * dpr, py + 3 * dpr);
     }
 
-    // Etiquetas de los ejes
+    // Etiquetas de los ejes (PROBLEMA 1b: eje rotado solo con la letra, sin unidad)
     ctx.fillStyle = "#94a3b8";
     ctx.font = `600 ${10 * dpr}px sans-serif`;
     ctx.textAlign = "center";
@@ -584,8 +665,11 @@ const Vista = {
     ctx.save();
     ctx.translate(15 * dpr, padTop + graphH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText("x (m)", 0, 0);
+    ctx.fillText("x", 0, 0);
     ctx.restore();
+
+    // PROBLEMA 1d: marcadores de eventos clave (t1, t_v, t2), antes de las curvas
+    this._dibujarMarcadoresEventoGrafica(ctx, toX, padTop, h, padBottom, dpr);
 
     const pasos = 100;
     const dt = tActual / pasos;
@@ -623,6 +707,13 @@ const Vista = {
     ctx.stroke();
 
     this._dibujarLeyendaGrafica(ctx, w, padRight, padTop, carColor, truckColor, dpr);
+
+    // PROBLEMA 1c: readout de posiciones instantáneas, esquina inferior izquierda
+    this._dibujarReadoutInstantaneo(ctx, padLeft + 8 * dpr, h - padBottom - 10 * dpr, dpr, [
+      { texto: `x₁ = ${Modelo.posicionAuto(tActual).toFixed(1)} m`, color: carColor },
+      { texto: "  ·  ", color: "#64748b" },
+      { texto: `x₂ = ${Modelo.posicionCamion(tActual).toFixed(1)} m`, color: truckColor },
+    ]);
   },
 
   /** Dibuja la gráfica de Velocidad (v vs t) en tiempo real con ejes, etiquetas y marcas numéricas */
@@ -664,8 +755,8 @@ const Vista = {
     const toX = (t) => padLeft + (t / tMax) * graphW;
     const toY = (v) => h - padBottom - (v / vMax) * graphH;
 
-    const pasoT = tMax / 4;
-    const pasoV = vMax / 4;
+    const pasoT = this._calcularPasoBonito(tMax);
+    const pasoV = this._calcularPasoBonito(vMax);
     const xTicksPx = [];
     const yTicksPx = [];
     for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) xTicksPx.push(toX(tVal));
@@ -682,23 +773,23 @@ const Vista = {
     ctx.lineTo(w - padRight, h - padBottom);
     ctx.stroke();
 
-    // --- Marcas y números en los ejes ---
+    // --- Marcas y números en los ejes (PROBLEMA 1b: con unidad en cada tick) ---
     ctx.fillStyle = "#64748b";
     ctx.font = `${9 * dpr}px sans-serif`;
     for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) {
       const px = toX(tVal);
       ctx.fillRect(px, h - padBottom, 1 * dpr, 4 * dpr);
       ctx.textAlign = "center";
-      ctx.fillText(`${tVal.toFixed(1)}s`, px, h - padBottom + 14 * dpr);
+      ctx.fillText(`${tVal.toFixed(1)} s`, px, h - padBottom + 14 * dpr);
     }
     for (let vVal = 0; vVal <= vMax + 1e-6; vVal += pasoV) {
       const py = toY(vVal);
       ctx.fillRect(padLeft - 4 * dpr, py, 4 * dpr, 1 * dpr);
       ctx.textAlign = "right";
-      ctx.fillText(`${vVal.toFixed(0)}`, padLeft - 8 * dpr, py + 3 * dpr);
+      ctx.fillText(`${this._formatoTick(vVal, pasoV)} m/s`, padLeft - 8 * dpr, py + 3 * dpr);
     }
 
-    // Etiquetas de los ejes
+    // Etiquetas de los ejes (PROBLEMA 1b: eje rotado solo con la letra, sin unidad)
     ctx.fillStyle = "#94a3b8";
     ctx.font = `600 ${10 * dpr}px sans-serif`;
     ctx.textAlign = "center";
@@ -706,8 +797,11 @@ const Vista = {
     ctx.save();
     ctx.translate(15 * dpr, padTop + graphH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText("v (m/s)", 0, 0);
+    ctx.fillText("v", 0, 0);
     ctx.restore();
+
+    // PROBLEMA 1d: marcadores de eventos clave (t1, t_v, t2), antes de las curvas
+    this._dibujarMarcadoresEventoGrafica(ctx, toX, padTop, h, padBottom, dpr);
 
     const pasos = 100;
     const dt = tActual / pasos;
@@ -745,6 +839,13 @@ const Vista = {
     ctx.stroke();
 
     this._dibujarLeyendaGrafica(ctx, w, padRight, padTop, carColor, truckColor, dpr);
+
+    // PROBLEMA 1c: readout de velocidades instantáneas, esquina inferior izquierda
+    this._dibujarReadoutInstantaneo(ctx, padLeft + 8 * dpr, h - padBottom - 10 * dpr, dpr, [
+      { texto: `v₁ = ${Modelo.velocidadAuto(tActual).toFixed(1)} m/s`, color: carColor },
+      { texto: "  ·  ", color: "#64748b" },
+      { texto: `v₂ = ${Modelo.velocidadCamion(tActual).toFixed(1)} m/s`, color: truckColor },
+    ]);
   },
 
   /** CAMBIO 3 (nueva): gráfica de Aceleración (a vs t). La aceleración es
@@ -783,8 +884,8 @@ const Vista = {
     // El 0 va al centro vertical, para poder mostrar valores negativos.
     const toY = (a) => padTop + graphH / 2 - (a / aMax) * (graphH / 2);
 
-    const pasoT = tMax / 4;
-    const pasoA = aMax / 2; // -aMax, -aMax/2, 0, +aMax/2, +aMax
+    const pasoT = this._calcularPasoBonito(tMax);
+    const pasoA = this._calcularPasoBonito(aMax); // rango de referencia = un solo lado (aMax)
     const xTicksPx = [];
     const yTicksPx = [];
     for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) xTicksPx.push(toX(tVal));
@@ -810,23 +911,23 @@ const Vista = {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // --- Marcas y números en los ejes ---
+    // --- Marcas y números en los ejes (PROBLEMA 1b: con unidad en cada tick) ---
     ctx.fillStyle = "#64748b";
     ctx.font = `${9 * dpr}px sans-serif`;
     for (let tVal = 0; tVal <= tMax + 1e-6; tVal += pasoT) {
       const px = toX(tVal);
       ctx.fillRect(px, h - padBottom, 1 * dpr, 4 * dpr);
       ctx.textAlign = "center";
-      ctx.fillText(`${tVal.toFixed(1)}s`, px, h - padBottom + 14 * dpr);
+      ctx.fillText(`${tVal.toFixed(1)} s`, px, h - padBottom + 14 * dpr);
     }
     for (let aVal = -aMax; aVal <= aMax + 1e-6; aVal += pasoA) {
       const py = toY(aVal);
       ctx.fillRect(padLeft - 4 * dpr, py, 4 * dpr, 1 * dpr);
       ctx.textAlign = "right";
-      ctx.fillText(`${aVal.toFixed(1)}`, padLeft - 8 * dpr, py + 3 * dpr);
+      ctx.fillText(`${this._formatoTick(aVal, pasoA)} m/s²`, padLeft - 8 * dpr, py + 3 * dpr);
     }
 
-    // Etiquetas de los ejes
+    // Etiquetas de los ejes (PROBLEMA 1b: eje rotado solo con la letra, sin unidad)
     ctx.fillStyle = "#94a3b8";
     ctx.font = `600 ${10 * dpr}px sans-serif`;
     ctx.textAlign = "center";
@@ -834,8 +935,11 @@ const Vista = {
     ctx.save();
     ctx.translate(15 * dpr, padTop + graphH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText("a (m/s²)", 0, 0);
+    ctx.fillText("a", 0, 0);
     ctx.restore();
+
+    // PROBLEMA 1d: marcadores de eventos clave (t1, t_v, t2), antes de las curvas
+    this._dibujarMarcadoresEventoGrafica(ctx, toX, padTop, h, padBottom, dpr);
 
     const carColor =
       getComputedStyle(document.documentElement).getPropertyValue("--car-color").trim() || "#38bdf8";
@@ -859,6 +963,13 @@ const Vista = {
     ctx.stroke();
 
     this._dibujarLeyendaGrafica(ctx, w, padRight, padTop, carColor, truckColor, dpr);
+
+    // PROBLEMA 1c: readout de aceleraciones instantáneas, esquina inferior izquierda
+    this._dibujarReadoutInstantaneo(ctx, padLeft + 8 * dpr, h - padBottom - 10 * dpr, dpr, [
+      { texto: `a₁ = ${a_1.toFixed(1)} m/s²`, color: carColor },
+      { texto: "  ·  ", color: "#64748b" },
+      { texto: `a₂ = ${a_2.toFixed(1)} m/s²`, color: truckColor },
+    ]);
   },
 
   /** CAMBIO 3: dispatcher — dibuja SOLO la gráfica cuya pestaña está activa,
@@ -924,10 +1035,17 @@ const Vista = {
     if (elemento) elemento.classList.toggle("event--active", activo);
   },
 
-  /** Botones Iniciar/Pausar: habilitado/deshabilitado según si la simulación corre. */
-  actualizarBotonesControl(enEjecucion) {
+  /** Botones Iniciar/Pausar. btnStart se deshabilita mientras la simulación
+   * está en ejecución (corriendo o pausada a mitad de animación). btnPause
+   * se habilita si está en ejecución, O si hay un "punto de reanudación"
+   * válido (el usuario hizo clic en un evento o movió el slider de tiempo,
+   * dejando un t concreto desde el cual el botón "Reanudar" puede retomar).
+   * CORREGIDO (bug): antes btnPause.disabled = !enEjecucion, así que tras un
+   * clic en evento (enEjecucion=false) el botón quedaba inoperable aunque su
+   * texto dijera "Reanudar". */
+  actualizarBotonesControl(enEjecucion, hayPuntoDeReanudacion = false) {
     if (this.btnStart) this.btnStart.disabled = enEjecucion;
-    if (this.btnPause) this.btnPause.disabled = !enEjecucion;
+    if (this.btnPause) this.btnPause.disabled = !(enEjecucion || hayPuntoDeReanudacion);
   },
 
   setTextoBotonPausa(texto) {
@@ -1009,6 +1127,7 @@ const Vista = {
    * -------------------------------------------------------------------- */
 
   render(t) {
+    this.actualizarCamara(t); // PROBLEMA 3: recalcula worldMinX/worldMaxX/pxPerMeter para este instante
     this.dibujarCarretera();
 
     const xCar = Modelo.posicionAuto(t);

@@ -58,7 +58,7 @@ const Controlador = {
       if (e.t >= Modelo.DATOS_EXAMEN.tEnd) {
         e.t = Modelo.DATOS_EXAMEN.tEnd;
         e.corriendo = false;
-        Vista.actualizarBotonesControl(false);
+        Vista.actualizarBotonesControl(false, false); // terminó sola: sin punto de reanudación
       }
     }
     e.ultimoFrameMs = timestampMs;
@@ -90,6 +90,21 @@ const Controlador = {
 
     Vista.btnPause?.addEventListener("click", () => {
       const e = this.estado;
+
+      if (!e.corriendo) {
+        // Veníamos de un clic en "Eventos clave" o de mover el slider de
+        // tiempo (corriendo=false, pausado=true, con un t ya definido):
+        // "Reanudar" debe retomar la animación desde ESE t, no desde 0.
+        e.corriendo = true;
+        e.pausado = false;
+        e.ultimoFrameMs = performance.now();
+        Vista.setTextoBotonPausa("⏸ Pausar");
+        Vista.actualizarBotonesControl(true);
+        requestAnimationFrame((ts) => this._tick(ts));
+        return;
+      }
+
+      // Pausa/reanudación normal, en medio de una animación que ya corría.
       e.pausado = !e.pausado;
       Vista.setTextoBotonPausa(e.pausado ? "▶ Reanudar" : "⏸ Pausar");
       if (!e.pausado) {
@@ -103,7 +118,7 @@ const Controlador = {
       e.corriendo = false;
       e.pausado = false;
       e.t = 0;
-      Vista.actualizarBotonesControl(false);
+      Vista.actualizarBotonesControl(false, false);
       Vista.setTextoBotonPausa("⏸ Pausar");
       const slider = Vista.timelineSlider;
       if (slider) slider.value = 0;
@@ -136,7 +151,7 @@ const Controlador = {
     slider.addEventListener("input", () => {
       this.estado.corriendo = false;
       this.estado.pausado = true;
-      Vista.actualizarBotonesControl(false);
+      Vista.actualizarBotonesControl(false, true); // hay punto de reanudación: este t
       Vista.setTextoBotonPausa("▶ Reanudar");
 
       this.estado.t = Number(slider.value);
@@ -152,7 +167,7 @@ const Controlador = {
         if (!isNaN(tiempoObjetivo)) {
           this.estado.corriendo = false;
           this.estado.pausado = true;
-          Vista.actualizarBotonesControl(false);
+          Vista.actualizarBotonesControl(false, true); // hay punto de reanudación: este t
           Vista.setTextoBotonPausa("▶ Reanudar");
 
           this.estado.t = tiempoObjetivo;
@@ -173,7 +188,7 @@ const Controlador = {
       // 1. Pausar simulación actual
       this.estado.corriendo = false;
       this.estado.pausado = false;
-      Vista.actualizarBotonesControl(false);
+      Vista.actualizarBotonesControl(false, false);
       Vista.setTextoBotonPausa("⏸ Pausar");
 
       // 2. Leer valores de los inputs del HTML
