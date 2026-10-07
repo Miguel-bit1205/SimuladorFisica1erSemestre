@@ -341,21 +341,7 @@ body {
   color: var(--text-mid);
 }
 
-/* --- Corrección definitiva para las gráficas --- */
-.graphs-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  width: 100%;
-  margin-top: 10px;
-}
-
-@media (max-width: 900px) {
-  .graphs-container {
-    grid-template-columns: 1fr;
-  }
-}
-
+/* --- CAMBIO 3: tarjeta única de gráficas, conmutables por tabs --- */
 .graph-card {
   background: var(--bg-panel);
   border: 1px solid var(--line-hair);
@@ -364,6 +350,7 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
+  margin-top: 10px;
 }
 
 .graph-card h2 {
@@ -375,12 +362,49 @@ body {
   text-transform: uppercase;
 }
 
+/* Barra de pestañas (x-t / v-t / a-t) */
+.graph-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-hair);
+  background: var(--bg-panel-raise);
+  color: var(--text-mid);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--text-hi);
+  border-color: var(--text-mid);
+}
+
+.tab-btn.is-active {
+  background: #0284c7;
+  border-color: #0ea5e9;
+  color: #ffffff;
+}
+
 /* Forzamos el tamaño real del canvas de las gráficas */
-.graph-card canvas {
+.graph-canvas {
   width: 100% !important;
   height: 240px !important;
   background: #030712;
   border-radius: 8px;
   border: 1px solid var(--line-hair);
   display: block;
+}
+
+/* La gráfica no activa se oculta por completo (CAMBIO 3) */
+.graph-canvas.is-hidden {
+  display: none !important;
 }

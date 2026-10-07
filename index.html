@@ -55,16 +55,25 @@
           </div>
         </div>
 
-        <!-- SECCIÓN DE GRÁFICAS DINÁMICAS (Ocupando todo el ancho inferior) -->
-        <div class="graphs-container">
-          <div class="graph-card">
-            <h2>Posición vs Tiempo (x - t)</h2>
-            <canvas id="canvasGraphX"></canvas>
+        <!-- SECCIÓN DE GRÁFICAS DINÁMICAS (ocupa todo el ancho inferior).
+             CAMBIO 3: 3 gráficas (x-t, v-t, a-t) conmutables por tabs,
+             solo una visible a la vez (las otras quedan con .is-hidden). -->
+        <div class="graph-card">
+          <div class="graph-tabs" id="graphTabs">
+            <button type="button" class="tab-btn is-active" data-graph="x">
+              Posición (x-t)
+            </button>
+            <button type="button" class="tab-btn" data-graph="v">
+              Velocidad (v-t)
+            </button>
+            <button type="button" class="tab-btn" data-graph="a">
+              Aceleración (a-t)
+            </button>
           </div>
-          <div class="graph-card">
-            <h2>Velocidad vs Tiempo (v - t)</h2>
-            <canvas id="canvasGraphV"></canvas>
-          </div>
+          <h2 id="graphTitulo">Posición vs Tiempo (x - t)</h2>
+          <canvas id="canvasGraphX" class="graph-canvas"></canvas>
+          <canvas id="canvasGraphV" class="graph-canvas is-hidden"></canvas>
+          <canvas id="canvasGraphA" class="graph-canvas is-hidden"></canvas>
         </div>
       </div>
 

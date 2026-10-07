@@ -27,13 +27,15 @@ const Controlador = {
     Vista.init();
     Vista.redimensionar();
     Vista.actualizarInfoEstatica(); // leyenda + tarjetas de eventos con los datos iniciales
+    Vista.cambiarGraficaActiva(Vista.graficaActiva); // CAMBIO 3: deja tabs/título consistentes
     Vista.render(this.estado.t);
 
     this._configurarBotones();
     this._configurarControlVelocidad();
     this._configurarSliderTiempo();
     this._configurarClicsEventos();
-    this._configurarParametrosDinamicos(); // <-- ¡Conectado correctamente aquí!
+    this._configurarParametrosDinamicos();
+    this._configurarTabsGraficas(); // CAMBIO 3: tabs x-t / v-t / a-t
 
     window.addEventListener("resize", () => {
       Vista.redimensionar();
@@ -215,6 +217,21 @@ const Controlador = {
 
       // 6. Redibujar la vista con los nuevos datos y gráficas
       Vista.render(this.estado.t);
+    });
+  },
+
+  /** CAMBIO 3: cada botón/tab solo cambia CUÁL gráfica se ve (Vista.cambiarGraficaActiva)
+   * y luego repinta con el "t" actual, para que la gráfica recién mostrada
+   * refleje el estado real de la simulación en ese momento. */
+  _configurarTabsGraficas() {
+    const tabs = Vista.graphTabs;
+    if (!tabs) return;
+
+    tabs.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        Vista.cambiarGraficaActiva(btn.dataset.graph);
+        Vista.render(this.estado.t);
+      });
     });
   },
 };
