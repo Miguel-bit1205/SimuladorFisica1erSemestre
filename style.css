@@ -394,17 +394,86 @@ body {
   color: #ffffff;
 }
 
-/* Forzamos el tamaño real del canvas de las gráficas */
+/* BLOQUE 1: gráficas cuadradas 500×500, con fallback responsivo.
+   El alto NO se fija en JS: vista.js lo mide con getBoundingClientRect(). */
 .graph-canvas {
-  width: 100% !important;
-  height: 240px !important;
+  width: 500px;
+  height: 500px;
+  max-width: 100%;
   background: #030712;
   border-radius: 8px;
   border: 1px solid var(--line-hair);
   display: block;
+  margin: 0 auto; /* centrado si sobra ancho */
+}
+
+@media (max-width: 900px) {
+  .graph-canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    max-width: 500px;
+  }
+}
+
+@media (max-width: 600px) {
+  .graph-canvas {
+    max-width: 100%;
+  }
 }
 
 /* La gráfica no activa se oculta por completo (CAMBIO 3) */
 .graph-canvas.is-hidden {
   display: none !important;
+}
+
+/* ---------- BLOQUE 4: feedback al pulsar "Actualizar Simulación" ---------- */
+.config-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.config-actions .btn {
+  flex: 1;
+}
+
+/* Flash azulado: luz que se desvanece en ~800 ms */
+@keyframes flashAzul {
+  0% {
+    background: #38bdf8;
+    box-shadow:
+      0 0 0 0 rgba(14, 165, 233, 0.9),
+      0 0 18px 4px rgba(14, 165, 233, 0.7);
+  }
+  100% {
+    background: #0284c7;
+    box-shadow:
+      0 0 0 12px rgba(14, 165, 233, 0),
+      0 0 0 0 rgba(14, 165, 233, 0);
+  }
+}
+
+.btn--flash {
+  animation: flashAzul 0.8s ease-out;
+}
+
+/* Badge: siempre presente en el DOM, solo cambia su opacidad */
+.config-badge {
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: #5eead4;
+  background: rgba(20, 184, 166, 0.12);
+  border: 1px solid rgba(94, 234, 212, 0.3);
+  padding: 4px 10px;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.config-badge.is-visible {
+  opacity: 1;
 }

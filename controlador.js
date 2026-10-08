@@ -232,6 +232,9 @@ const Controlador = {
 
       // 6. Redibujar la vista con los nuevos datos y gráficas
       Vista.render(this.estado.t);
+
+      // 7. Feedback visual (flash en el botón + badge); el DOM lo maneja la Vista
+      Vista.mostrarConfirmacionActualizacion();
     });
   },
 
